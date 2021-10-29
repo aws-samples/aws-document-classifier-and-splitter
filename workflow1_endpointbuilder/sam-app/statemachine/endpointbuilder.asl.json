@@ -1,0 +1,233 @@
+{
+  "Comment": "This is your state machine",
+  "StartAt": "Create Table & DynamoDB Stream",
+  "States": {
+    "Create Table & DynamoDB Stream": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${CreateTableAndFunction3TriggerFunction}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Insert Table Rows with Object Keys"
+    },
+    "Insert Table Rows with Object Keys": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${InsertTableRowsWithObjectKeysFunction2}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Check Table Status"
+    },
+    "Check Table Status": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${CheckTableStatusFunction4}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Is Table Complete?"
+    },
+    "Is Table Complete?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.is_complete",
+          "BooleanEquals": true,
+          "Next": "Create CSV"
+        }
+      ],
+      "Default": "Wait for Object Processing"
+    },
+    "Wait for Object Processing": {
+      "Type": "Wait",
+      "Seconds": 300,
+      "Next": "Check Table Status"
+    },
+    "Create CSV": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${CreateCSVFunction5}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Train Classifier"
+    },
+    "Train Classifier": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${TrainClassifierFunction6}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Check Classifier Status"
+    },
+    "Check Classifier Status": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${CheckClassifierStatusFunction7}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Is Training Complete?"
+    },
+    "Is Training Complete?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.is_trained",
+          "BooleanEquals": true,
+          "Next": "Build Endpoint"
+        }
+      ],
+      "Default": "Wait for Training"
+    },
+    "Build Endpoint": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${BuildEndpointFunction8}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Check Endpoint Status"
+    },
+    "Check Endpoint Status": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${CheckEndpointStatusFunction9}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 6,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Is Endpoint Ready?"
+    },
+    "Is Endpoint Ready?": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.endpoint_is_complete",
+          "BooleanEquals": true,
+          "Next": "Success"
+        }
+      ],
+      "Default": "Wait for Endpoint"
+    },
+    "Success": {
+      "Type": "Succeed"
+    },
+    "Wait for Endpoint": {
+      "Type": "Wait",
+      "Seconds": 300,
+      "Next": "Check Endpoint Status"
+    },
+    "Wait for Training": {
+      "Type": "Wait",
+      "Seconds": 600,
+      "Next": "Check Classifier Status"
+    }
+  }
+}

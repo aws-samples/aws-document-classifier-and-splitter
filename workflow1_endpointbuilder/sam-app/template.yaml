@@ -1,0 +1,191 @@
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: SAM template for endpointbuilder
+
+Resources:
+  EndpointBuilderStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine/endpointbuilder.asl.json
+      DefinitionSubstitutions:
+        CreateTableAndFunction3TriggerFunction: !GetAtt EndpointBuilderFunction1CreateTableAndFunction3Trigger.Arn
+        InsertTableRowsWithObjectKeysFunction2: !GetAtt EndpointBuilderFunction2InsertTableRowsWithObjectKeys.Arn
+        CheckTableStatusFunction4: !GetAtt EndpointBuilderFunction4CheckTableStatus.Arn
+        CreateCSVFunction5: !GetAtt EndpointBuilderFunction5CreateCSV.Arn
+        TrainClassifierFunction6: !GetAtt EndpointBuilderFunction6TrainClassifier.Arn
+        CheckClassifierStatusFunction7: !GetAtt EndpointBuilderFunction7CheckClassifierStatus.Arn
+        BuildEndpointFunction8: !GetAtt EndpointBuilderFunction8BuildEndpoint.Arn
+        CheckEndpointStatusFunction9: !GetAtt EndpointBuilderFunction9CheckEndpointStatus.Arn
+      Role: !GetAtt EndpointBuilderRole.Arn
+
+  EndpointBuilderFunction1CreateTableAndFunction3Trigger:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/function1_createtableandfunction3trigger/
+      Role: !GetAtt EndpointBuilderRole.Arn
+      Description: Creates DynamoDB table and trigger for EndpointBuilderFunction3
+      Timeout: 180
+      MemorySize: 128
+      Runtime: python3.8
+      Handler: index.lambda_handler
+
+  EndpointBuilderFunction2InsertTableRowsWithObjectKeys:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: functions/function2_inserttablerowswithobjectkeys/
+      Role: !GetAtt EndpointBuilderRole.Arn
+      Description: Inserts rows into DynamoDB table using the S3 object keys as the primary key
+      Timeout: 900
+      MemorySize: 10240
+      Runtime: python3.8
+      Handler: index.lambda_handler
+
+  EndpointBuilderFunction3ProcessObjectsAndUpdateRows:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      FunctionName: EndpointBuilder-Function3-ProcessObjects
+      Description: Processes S3 objects via DynamoDB insert row trigger; uses object key to extract file text and class; updates table row; its FunctionName is used inside Function1 code to create the DynamoDB event source mapping
+      Role: !GetAtt EndpointBuilderRole.Arn
+      Timeout: 900
+      MemorySize: 10240
+      PackageType: Image
+      ImageConfig:
+        Command: [ "index.lambda_handler" ]
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: functions/function3_processobjectsandupdaterows/
+      DockerTag: v1
+
+  EndpointBuilderFunction4CheckTableStatus:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: functions/function4_checktablestatus/
+      Role: !GetAtt EndpointBuilderRole.Arn
+      Description: Check DynamoDB table status--all rows must have existing class and text attributes (provided by EndpointBuilderFunction3ProcessObjectsAndUpdateRows)
+      Timeout: 900
+      MemorySize: 10240
+      Runtime: python3.8
+      Handler: index.lambda_handler
+
+  EndpointBuilderFunction5CreateCSV:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: functions/function5_createcsv/
+      Role: !GetAtt EndpointBuilderRole.Arn
+      Description: Creates CSV file from DynamoDB table and uploads to S3 bucket
+      Timeout: 900
+      MemorySize: 10240
+      Runtime: python3.8
+      Handler: index.lambda_handler
+
+  EndpointBuilderFunction6TrainClassifier:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: functions/function6_trainclassifier/
+      Role: !GetAtt EndpointBuilderRole.Arn
+      Description: Trains Comprehend classifier using the CSV created in EndpointBuilderFunction5CreateCSV
+      Timeout: 300
+      MemorySize: 2048
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      Environment:
+        Variables:
+          FUNCTION6_TRAIN_CLASSIFIER_COMPREHEND_ROLE_ARN: !GetAtt Function6ComprehendRole.Arn
+
+  EndpointBuilderFunction7CheckClassifierStatus:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: functions/function7_checkclassifierstatus/
+      Role: !GetAtt EndpointBuilderRole.Arn
+      Description: Checks Comprehend classifier status to verify if it has finished training
+      Timeout: 60
+      MemorySize: 128
+      Runtime: python3.8
+      Handler: index.lambda_handler
+
+  EndpointBuilderFunction8BuildEndpoint:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: functions/function8_buildendpoint/
+      Role: !GetAtt EndpointBuilderRole.Arn
+      Description: Creates Comprehend endpoint from trained classifier
+      Timeout: 60
+      MemorySize: 128
+      Runtime: python3.8
+      Handler: index.lambda_handler
+
+  EndpointBuilderFunction9CheckEndpointStatus:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: functions/function9_checkendpointstatus/
+      Role: !GetAtt EndpointBuilderRole.Arn
+      Description: Checks Comprehend endpoint status to verify if it has been created
+      Timeout: 60
+      MemorySize: 128
+      Runtime: python3.8
+      Handler: index.lambda_handler
+
+  EndpointBuilderRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - states.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: Role executes Lambda functions
+      MaxSessionDuration: 43200
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 'iam:PassRole'
+                  - 'textract:*'
+                  - 'dynamodb:*'
+                  - 'lambda:*'
+                  - 'comprehend:*'
+                  - 'states:*'
+                  - 'logs:*'
+                Resource: '*'
+
+  Function6ComprehendRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - comprehend.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: Service role for Comprehend classifier
+      MaxSessionDuration: 43200
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource: '*'
+
+Outputs:
+  StateMachineArn:
+    Description: Arn of the EndpointBuilder State Machine
+    Value: !GetAtt EndpointBuilderStateMachine.Arn
+    Export:
+      Name: State-Machine-Arn

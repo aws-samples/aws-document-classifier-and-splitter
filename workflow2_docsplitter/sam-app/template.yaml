@@ -1,0 +1,119 @@
+Transform: 'AWS::Serverless-2016-10-31'
+
+Description: SAM template for docsplitter
+
+Resources:
+  GetALBInfoFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: functions/getalbinfo_function/
+      Role: !GetAtt DocSplitterRole.Arn
+      Description: Uses AWS EC2 API to obtain VpcId and Subnet Ids required for creating the ALB
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      Timeout: 120
+      MemorySize: 256
+
+  GetALBInfoFunctionInvoke:
+    Type: AWS::CloudFormation::CustomResource
+    Version: "1.0"
+    Properties:
+      ServiceToken: !GetAtt GetALBInfoFunction.Arn
+
+  DocSplitterFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Description: Splits input PDF based on each page's class; used as ALB target
+      Role: !GetAtt DocSplitterRole.Arn
+      Timeout: 900
+      MemorySize: 10240
+      PackageType: Image
+      ImageConfig:
+        Command: [ "index.lambda_handler" ]
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: functions/docsplitter_function/
+      DockerTag: v1
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      SecurityGroups:
+        - !GetAtt SecurityGroup.GroupId
+      Subnets: !GetAtt GetALBInfoFunctionInvoke.Subnets
+      Type: application
+
+  Listener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  LambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !GetAtt DocSplitterFunction.Arn
+      Action: 'lambda:InvokeFunction'
+      Principal: elasticloadbalancing.amazonaws.com
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn:
+      - LambdaInvokePermission
+    Properties:
+      HealthCheckEnabled: false
+      Name: DocSplitterTargetGroup
+      TargetType: lambda
+      Targets:
+        - Id: !GetAtt DocSplitterFunction.Arn
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      VpcId: !GetAtt GetALBInfoFunctionInvoke.VpcId
+      GroupDescription: security group for DocSplitter application load balancer
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  DocSplitterRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: Role executes Lambda functions
+      MaxSessionDuration: 43200
+      Policies:
+        - PolicyName: root
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 'textract:*'
+                  - 'lambda:*'
+                  - 'comprehend:*'
+                  - 'logs:*'
+                  - 'ec2:DescribeSubnets'
+                  - 'ec2:DescribeVpcs'
+                Resource: '*'
+
+Outputs:
+  LoadBalancerDnsName:
+    Description: DNS Name of the DocSplitter application load balancer with the Lambda target group.
+    Value: !GetAtt LoadBalancer.DNSName
