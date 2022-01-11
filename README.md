@@ -2,6 +2,11 @@
 
 ## Workflow 1: Endpoint Builder
 
+
+Blog: https://aws.amazon.com/blogs/machine-learning/intelligently-split-multi-form-document-packages-with-amazon-textract-and-amazon-comprehend/
+
+Authors: Aditi Rajnish, Raj Pathak
+
 #### Description
 Workflow 1 will take documents stored on Amazon S3 and send them through a series of steps to extract the data from the documents via Amazon Textract. 
 Then, the extracted data will be used to create an Amazon Comprehend Custom Classification Endpoint.
