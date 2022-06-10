@@ -1,4 +1,3 @@
-
 import boto3
 import datetime
 from urllib.parse import urlparse
@@ -8,27 +7,19 @@ def create_dataset_table(datetime_id, bucket_name):
     dynamodb_resource = boto3.resource('dynamodb')
     dynamodb_resource.create_table(
         TableName=f'DatasetCSVTable_{datetime_id}_{bucket_name}_',
-        KeySchema=[
-            {
-                'AttributeName': 'objectKey',
-                'KeyType': 'HASH'
-            }
-        ],
-        AttributeDefinitions=[
-            {
-                'AttributeName': 'objectKey',
-                'AttributeType': 'S'
-            }
-        ],
-        ProvisionedThroughput={
-            'ReadCapacityUnits': 1000,
-            'WriteCapacityUnits': 1000
-        },
+        KeySchema=[{
+            'AttributeName': 'objectKey',
+            'KeyType': 'HASH'
+        }],
+        AttributeDefinitions=[{
+            'AttributeName': 'objectKey',
+            'AttributeType': 'S'
+        }],
+        BillingMode='PAY_PER_REQUEST',
         StreamSpecification={
             'StreamEnabled': True,
             'StreamViewType': 'NEW_AND_OLD_IMAGES'
-        }
-    )
+        })
 
 
 def create_function3_trigger(stream_arn):
@@ -44,8 +35,7 @@ def create_function3_trigger(stream_arn):
         MaximumRetryAttempts=3,
         FunctionResponseTypes=[
             'ReportBatchItemFailures',
-        ]
-    )
+        ])
 
 
 def lambda_handler(event, context):
@@ -58,8 +48,7 @@ def lambda_handler(event, context):
     dynamodb_client = boto3.client('dynamodb')
     while True:
         response = dynamodb_client.describe_table(
-            TableName=f'DatasetCSVTable_{datetime_id}_{bucket_name}_'
-        )
+            TableName=f'DatasetCSVTable_{datetime_id}_{bucket_name}_')
         status = response["Table"]["TableStatus"]
         if status == "ACTIVE":
             stream_arn = response['Table']['LatestStreamArn']
@@ -67,7 +56,4 @@ def lambda_handler(event, context):
 
     create_function3_trigger(stream_arn)
 
-    return {
-        'datetime_id': datetime_id,
-        'folder_uri': folder_uri
-    }
+    return {'datetime_id': datetime_id, 'folder_uri': folder_uri}
