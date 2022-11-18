@@ -26,7 +26,7 @@ Resources:
       Description: Splits input PDF based on each page's class; used as ALB target
       Role: !GetAtt DocSplitterRole.Arn
       Timeout: 900
-      MemorySize: 2048
+      MemorySize: 128
       PackageType: Image
       ImageConfig:
         Command: [ "index.lambda_handler" ]
