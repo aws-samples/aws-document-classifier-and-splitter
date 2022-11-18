@@ -36,7 +36,7 @@ Resources:
       Role: !GetAtt EndpointBuilderRole.Arn
       Description: Inserts rows into DynamoDB table using the S3 object keys as the primary key
       Timeout: 900
-      MemorySize: 10240
+      MemorySize: 2048
       Runtime: python3.8
       Handler: index.lambda_handler
 
@@ -47,7 +47,7 @@ Resources:
       Description: Processes S3 objects via DynamoDB insert row trigger; uses object key to extract file text and class; updates table row; its FunctionName is used inside Function1 code to create the DynamoDB event source mapping
       Role: !GetAtt EndpointBuilderRole.Arn
       Timeout: 900
-      MemorySize: 10240
+      MemorySize: 2048
       PackageType: Image
       ImageConfig:
         Command: [ "index.lambda_handler" ]
@@ -63,7 +63,7 @@ Resources:
       Role: !GetAtt EndpointBuilderRole.Arn
       Description: Check DynamoDB table status--all rows must have existing class and text attributes (provided by EndpointBuilderFunction3ProcessObjectsAndUpdateRows)
       Timeout: 900
-      MemorySize: 10240
+      MemorySize: 2048
       Runtime: python3.8
       Handler: index.lambda_handler
 
@@ -74,7 +74,7 @@ Resources:
       Role: !GetAtt EndpointBuilderRole.Arn
       Description: Creates CSV file from DynamoDB table and uploads to S3 bucket
       Timeout: 900
-      MemorySize: 10240
+      MemorySize: 2048
       Runtime: python3.8
       Handler: index.lambda_handler
 
