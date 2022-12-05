@@ -3,6 +3,16 @@ Transform: 'AWS::Serverless-2016-10-31'
 Description: SAM template for docsplitter
 
 Resources:
+  DynamoDBTable:
+    Type: AWS::DynamoDB::Table
+    Properties: 
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions: 
+        - AttributeName: id
+          AttributeType: S
+      KeySchema: 
+        - AttributeName: id
+          KeyType: HASH
   GetALBInfoFunction:
     Type: 'AWS::Serverless::Function'
     Properties:
@@ -26,7 +36,7 @@ Resources:
       Description: Splits input PDF based on each page's class; used as ALB target
       Role: !GetAtt DocSplitterRole.Arn
       Timeout: 900
-      MemorySize: 128
+      MemorySize: 512
       PackageType: Image
       ImageConfig:
         Command: [ "index.lambda_handler" ]

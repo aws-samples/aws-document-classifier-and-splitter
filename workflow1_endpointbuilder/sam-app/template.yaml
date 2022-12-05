@@ -46,15 +46,11 @@ Resources:
       FunctionName: EndpointBuilder-Function3-ProcessObjects
       Description: Processes S3 objects via DynamoDB insert row trigger; uses object key to extract file text and class; updates table row; its FunctionName is used inside Function1 code to create the DynamoDB event source mapping
       Role: !GetAtt EndpointBuilderRole.Arn
+      CodeUri: functions/function3_processobjectsandupdaterows/
       Timeout: 900
       MemorySize: 128
-      PackageType: Image
-      ImageConfig:
-        Command: [ "index.lambda_handler" ]
-    Metadata:
-      Dockerfile: Dockerfile
-      DockerContext: functions/function3_processobjectsandupdaterows/
-      DockerTag: v1
+      Runtime: python3.8
+      Handler: index.lambda_handler
 
   EndpointBuilderFunction4CheckTableStatus:
     Type: 'AWS::Serverless::Function'

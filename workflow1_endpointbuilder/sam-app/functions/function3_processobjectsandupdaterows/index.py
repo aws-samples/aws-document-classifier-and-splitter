@@ -1,43 +1,16 @@
 
 import boto3
-from io import BytesIO
-from pdf2image import convert_from_bytes
-from textractcaller.t_call import call_textract
-from textractprettyprinter.t_pretty_print import get_lines_string
 
+dynamodb = boto3.client('dynamodb')
+textract = boto3.client('textract')
 
 def process_file(key, datetime_id, bucket_name):
-    _class = key.split("/")[1]
-    s3 = boto3.client('s3')
-    dynamodb = boto3.client('dynamodb')
-
-    s3_response_object = s3.get_object(Bucket=bucket_name, Key=key)
-    object_content = s3_response_object['Body'].read()
-
-    if key.endswith(".pdf"):
-        images = convert_from_bytes(object_content)
-        all_raw_text = ""
-        for i, image in enumerate(images):
-            image_text = call_textract_for_pdf(image)
-            all_raw_text += image_text
-        update_dynamodb_row(key, _class, all_raw_text, datetime_id, bucket_name, dynamodb)
-
-    else:
-        image_text = call_textract_for_image(object_content)
-        update_dynamodb_row(key, _class, image_text, datetime_id, bucket_name, dynamodb)
-
-
-def call_textract_for_pdf(image):
-    buf = BytesIO()
-    image.save(buf, format='JPEG')
-    byte_string = buf.getvalue()
-    return call_textract_for_image(byte_string)
-
-
-def call_textract_for_image(object_content):
-    textract_json = call_textract(input_document=object_content)
-    return get_lines_string(textract_json=textract_json)
-
+    print(f'processing bucker {bucket_name} with key {key} at {datetime_id}')
+    _class = key.split("/")[0]  
+    textract_response = textract.detect_document_text(Document={'S3Object': {'Bucket': bucket_name, 'Name': key}})
+    #print(textract_response)
+    raw_text = " ".join([ block['Text'] for block in textract_response['Blocks'] if 'Text' in block ])
+    update_dynamodb_row(key, _class, raw_text, datetime_id, bucket_name, dynamodb)
 
 def update_dynamodb_row(key, _class, raw_text, datetime_id, bucket_name, dynamodb):
     dynamodb.update_item(

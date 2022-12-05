@@ -81,7 +81,7 @@
     },
     "Wait for Object Processing": {
       "Type": "Wait",
-      "Seconds": 300,
+      "Seconds": 60,
       "Next": "Check Table Status"
     },
     "Create CSV": {
