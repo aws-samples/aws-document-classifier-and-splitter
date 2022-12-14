@@ -8,6 +8,7 @@ from datetime import datetime
 from pdf2image import convert_from_bytes
 from PyPDF2 import PdfFileReader, PdfFileWriter
 from textractcaller.t_call import call_textract
+from textractprettyprinter.t_pretty_print import get_lines_string
 
 s3 = boto3.client('s3')
 textract = boto3.client('textract')
@@ -117,18 +118,6 @@ def get_comprehend_model_arn(model_name):
 
 
 def lambda_handler(event, context):
-    if event['path'] == '/':
-        return {
-            "statusCode": 200,
-            "statusDescription": "200 OK",
-            "isBase64Encoded": False,
-            "headers": {
-                "Content-Type": "text/html"
-            },
-            "body": "This is the Document Splitter API."
-        }
-
-    request_body = json.loads(base64.b64decode(event['body']))
     endpoint_arn = get_comprehend_model_arn('document-classifier')
 
     _id = datetime.now().strftime("%Y%m%d%H%M%S")
