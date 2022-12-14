@@ -8,7 +8,6 @@ from datetime import datetime
 from pdf2image import convert_from_bytes
 from PyPDF2 import PdfFileReader, PdfFileWriter
 from textractcaller.t_call import call_textract
-from textractprettyprinter.t_pretty_print import get_lines_string
 
 s3 = boto3.client('s3')
 textract = boto3.client('textract')
@@ -101,6 +100,21 @@ def split_input_pdf_by_class(input_pdf_content, endpoint_arn, _id):
     print("Input PDF has been split up and classified\n")
     return pages_by_class
 
+def get_comprehend_model_arn(model_name):
+    '''
+    Gets the ARN of the first comprehend model that contains the string model_name
+    '''
+    # List the available Comprehend models
+    response = comprehend.list_endpoints()
+
+    # Find the model with the specified name
+    models = [model for model in response["Endpoints"] if model_name in model["EndpointName"]]
+    if models < 1:
+        raise Exception(f"Model containing {model_name} could not be found")
+        
+    time_sorted_models = sorted(response["Endpoints"], key=lambda x: x["LastModified"])
+    return time_sorted_models[-1]["EndpointArn"]
+
 
 def lambda_handler(event, context):
     if event['path'] == '/':
@@ -115,13 +129,16 @@ def lambda_handler(event, context):
         }
 
     request_body = json.loads(base64.b64decode(event['body']))
-    endpoint_arn = request_body['endpoint_arn']
-    bucket_name = request_body['bucket_name']
+    endpoint_arn = get_comprehend_model_arn('document-classifier')
 
     _id = datetime.now().strftime("%Y%m%d%H%M%S")
-
-    input_pdf_uri = request_body['input_pdf_uri']
-    input_pdf_key = input_pdf_uri.split(bucket_name + "/", 1)[1]
+  
+    bucket_name = event["Records"][0]["s3"]["bucket"]["name"]
+    input_pdf_key = event["Records"][0]["s3"]["object"]["key"]
+    
+    file_ext = input_pdf_key.split(".")[-1]
+    if not file_ext.lower() == "pdf":
+        raise Exception("The uploaded object is not a PDF file: %s" % input_pdf_key)
 
     # pages_by_class is a dictionary
     # key is class name; value is list of page numbers belonging to the key class

@@ -3,95 +3,28 @@ Transform: 'AWS::Serverless-2016-10-31'
 Description: SAM template for docsplitter
 
 Resources:
-  DynamoDBTable:
-    Type: AWS::DynamoDB::Table
-    Properties: 
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions: 
-        - AttributeName: id
-          AttributeType: S
-      KeySchema: 
-        - AttributeName: id
-          KeyType: HASH
-  GetALBInfoFunction:
-    Type: 'AWS::Serverless::Function'
-    Properties:
-      CodeUri: functions/getalbinfo_function/
-      Role: !GetAtt DocSplitterRole.Arn
-      Description: Uses AWS EC2 API to obtain VpcId and Subnet Ids required for creating the ALB
-      Runtime: python3.8
-      Handler: index.lambda_handler
-      Timeout: 120
-      MemorySize: 256
-
-  GetALBInfoFunctionInvoke:
-    Type: AWS::CloudFormation::CustomResource
-    Version: "1.0"
-    Properties:
-      ServiceToken: !GetAtt GetALBInfoFunction.Arn
-
+  PDFBucket:
+    Type: 'AWS::S3::Bucket'
   DocSplitterFunction:
     Type: 'AWS::Serverless::Function'
     Properties:
-      Description: Splits input PDF based on each page's class; used as ALB target
+      Description: Splits input PDF based on each page's class; Triggerred when a PDF is uploaded to the S3 Bucket created by the same SAM stack
       Role: !GetAtt DocSplitterRole.Arn
       Timeout: 900
       MemorySize: 512
       PackageType: Image
       ImageConfig:
         Command: [ "index.lambda_handler" ]
+      Events:
+          S3Trigger:
+            Type: S3
+            Properties:
+              Bucket: !Ref PDFBucket
+              Events: s3:ObjectCreated:*
     Metadata:
       Dockerfile: Dockerfile
       DockerContext: functions/docsplitter_function/
-      DockerTag: v1
-
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      SecurityGroups:
-        - !GetAtt SecurityGroup.GroupId
-      Subnets: !GetAtt GetALBInfoFunctionInvoke.Subnets
-      Type: application
-
-  Listener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref TargetGroup
-      LoadBalancerArn: !Ref LoadBalancer
-      Port: 80
-      Protocol: HTTP
-
-  LambdaInvokePermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !GetAtt DocSplitterFunction.Arn
-      Action: 'lambda:InvokeFunction'
-      Principal: elasticloadbalancing.amazonaws.com
-
-  TargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    DependsOn:
-      - LambdaInvokePermission
-    Properties:
-      HealthCheckEnabled: false
-      Name: DocSplitterTargetGroup
-      TargetType: lambda
-      Targets:
-        - Id: !GetAtt DocSplitterFunction.Arn
-
-  SecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId: !GetAtt GetALBInfoFunctionInvoke.VpcId
-      GroupDescription: security group for DocSplitter application load balancer
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-
+      DockerTag: v2
   DocSplitterRole:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -119,11 +52,8 @@ Resources:
                   - 'lambda:*'
                   - 'comprehend:*'
                   - 'logs:*'
-                  - 'ec2:DescribeSubnets'
-                  - 'ec2:DescribeVpcs'
                 Resource: '*'
-
 Outputs:
-  LoadBalancerDnsName:
-    Description: DNS Name of the DocSplitter application load balancer with the Lambda target group.
-    Value: !GetAtt LoadBalancer.DNSName
+  S3Bucket:
+    Description: Name of the S3Bucket
+    Value: !Ref PDFBucket
