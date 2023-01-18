@@ -14,7 +14,6 @@ Resources:
         CreateCSVFunction5: !GetAtt EndpointBuilderFunction5CreateCSV.Arn
         TrainClassifierFunction6: !GetAtt EndpointBuilderFunction6TrainClassifier.Arn
         CheckClassifierStatusFunction7: !GetAtt EndpointBuilderFunction7CheckClassifierStatus.Arn
-        BuildEndpointFunction8: !GetAtt EndpointBuilderFunction8BuildEndpoint.Arn
         CheckEndpointStatusFunction9: !GetAtt EndpointBuilderFunction9CheckEndpointStatus.Arn
       Role: !GetAtt EndpointBuilderRole.Arn
 
@@ -94,17 +93,6 @@ Resources:
       CodeUri: functions/function7_checkclassifierstatus/
       Role: !GetAtt EndpointBuilderRole.Arn
       Description: Checks Comprehend classifier status to verify if it has finished training
-      Timeout: 60
-      MemorySize: 128
-      Runtime: python3.8
-      Handler: index.lambda_handler
-
-  EndpointBuilderFunction8BuildEndpoint:
-    Type: 'AWS::Serverless::Function'
-    Properties:
-      CodeUri: functions/function8_buildendpoint/
-      Role: !GetAtt EndpointBuilderRole.Arn
-      Description: Creates Comprehend endpoint from trained classifier
       Timeout: 60
       MemorySize: 128
       Runtime: python3.8

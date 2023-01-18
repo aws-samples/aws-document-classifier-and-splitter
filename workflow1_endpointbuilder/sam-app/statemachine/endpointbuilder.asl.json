@@ -156,73 +156,13 @@
         {
           "Variable": "$.is_trained",
           "BooleanEquals": true,
-          "Next": "Build Endpoint"
+          "Next": "Success"
         }
       ],
       "Default": "Wait for Training"
     },
-    "Build Endpoint": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "OutputPath": "$.Payload",
-      "Parameters": {
-        "Payload.$": "$",
-        "FunctionName": "${BuildEndpointFunction8}"
-      },
-      "Retry": [
-        {
-          "ErrorEquals": [
-            "Lambda.ServiceException",
-            "Lambda.AWSLambdaException",
-            "Lambda.SdkClientException"
-          ],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 6,
-          "BackoffRate": 2
-        }
-      ],
-      "Next": "Check Endpoint Status"
-    },
-    "Check Endpoint Status": {
-      "Type": "Task",
-      "Resource": "arn:aws:states:::lambda:invoke",
-      "OutputPath": "$.Payload",
-      "Parameters": {
-        "Payload.$": "$",
-        "FunctionName": "${CheckEndpointStatusFunction9}"
-      },
-      "Retry": [
-        {
-          "ErrorEquals": [
-            "Lambda.ServiceException",
-            "Lambda.AWSLambdaException",
-            "Lambda.SdkClientException"
-          ],
-          "IntervalSeconds": 2,
-          "MaxAttempts": 6,
-          "BackoffRate": 2
-        }
-      ],
-      "Next": "Is Endpoint Ready?"
-    },
-    "Is Endpoint Ready?": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.endpoint_is_complete",
-          "BooleanEquals": true,
-          "Next": "Success"
-        }
-      ],
-      "Default": "Wait for Endpoint"
-    },
     "Success": {
       "Type": "Succeed"
-    },
-    "Wait for Endpoint": {
-      "Type": "Wait",
-      "Seconds": 300,
-      "Next": "Check Endpoint Status"
     },
     "Wait for Training": {
       "Type": "Wait",
