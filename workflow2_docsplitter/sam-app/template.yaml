@@ -3,12 +3,39 @@ Transform: 'AWS::Serverless-2016-10-31'
 Description: SAM template for docsplitter
 
 Resources:
-  PDFBucket:
+  InputPDFBucket:
     Type: 'AWS::S3::Bucket'
-  DocSplitterFunction:
+    Description: Upload a PDF to this bucket to trigger a classifier job
+    Properties:
+      Tags: 
+      - Key: "Project"
+        Value: "document-processing"
+  SplitPDFBucket:
+    Type: 'AWS::S3::Bucket'
+    Description: Where PDFs are split by page
+    Properties:
+      BucketName: !Sub "docsplitter-splitpdf-bucket-${AWS::AccountId}"
+      Tags: 
+      - Key: "Project"
+        Value: "document-processing"
+  ComprehendBucket:
+    Type: 'AWS::S3::Bucket'
+    Description: Where Comprehend stores classifier output
+    Properties:
+      Tags: 
+        - Key: "Project"
+          Value: "document-processing"
+  OutputPDFBucket:
+    Type: 'AWS::S3::Bucket'
+    Description: Where PDFs are stored after being split
+    Properties:
+      Tags: 
+        - Key: "Project"
+          Value: "document-processing"
+  SplitPDFFunction:
     Type: 'AWS::Serverless::Function'
     Properties:
-      Description: Splits input PDF based on each page's class; Triggerred when a PDF is uploaded to the S3 Bucket created by the same SAM stack
+      Description: When new S3 object added to the PDF Bucket, starts a comprehend classifier job
       Role: !GetAtt DocSplitterRole.Arn
       Timeout: 900
       MemorySize: 512
@@ -19,14 +46,76 @@ Resources:
           S3Trigger:
             Type: S3
             Properties:
-              Bucket: !Ref PDFBucket
+              Bucket:
+                Ref: InputPDFBucket
               Events: s3:ObjectCreated:*
+      Environment:
+        Variables:
+          comprehendRoleArn: !GetAtt DocSplitterRole.Arn
+          outputBucket: !Ref SplitPDFBucket
+      Tags: 
+        Project: "document-processing"
     Metadata:
       Dockerfile: Dockerfile
-      DockerContext: functions/docsplitter_function/
+      DockerContext: functions/0_split_pdf_by_page/
       DockerTag: v2
+  StartComprehendJobFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Description: When new S3 object added to the PDF Bucket, starts a comprehend classifier job
+      Role: !GetAtt DocSplitterRole.Arn
+      Timeout: 900
+      MemorySize: 512
+      PackageType: Zip
+      CodeUri: ./functions/1_start_comprehend_job
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      Events:
+          S3Trigger:
+            Type: S3
+            Properties:
+              Bucket:
+                Ref: SplitPDFBucket
+              Events: s3:ObjectCreated:*
+      Environment:
+        Variables:
+          comprehendRoleArn: !GetAtt ComprehendDataAccessRole.Arn
+          outputBucket: !Ref ComprehendBucket
+      Tags: 
+        Project: "document-processing"
+  GroupByClassFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Description: When new S3 object added to the ComprehendBucket, it moves the page file into the right key
+      Role: !GetAtt DocSplitterRole.Arn
+      Timeout: 900
+      MemorySize: 512
+      PackageType: Zip
+      CodeUri: ./functions/3_group_pages_by_class
+      Runtime: python3.8
+      Handler: index.lambda_handler
+      Events:
+          S3Trigger:
+            Type: S3
+            Properties:
+              Bucket:
+                Ref: ComprehendBucket
+              Events: s3:ObjectCreated:*
+              Filter: 
+                S3Key:
+                  Rules:
+                    - Name: suffix
+                      Value: .tar.gz
+      Environment:
+        Variables:
+          comprehendRoleArn: !GetAtt ComprehendDataAccessRole.Arn
+          splitBucket: !Sub "docsplitter-splitpdf-bucket-${AWS::AccountId}"
+          outputBucket: !Ref OutputPDFBucket
+      Tags: 
+        Project: "document-processing"
   DocSplitterRole:
     Type: 'AWS::IAM::Role'
+    Description: Role executes Lambda functions
     Properties:
       AssumeRolePolicyDocument:
         Statement:
@@ -36,10 +125,9 @@ Resources:
                 - lambda.amazonaws.com
             Action:
               - 'sts:AssumeRole'
-      Description: Role executes Lambda functions
       MaxSessionDuration: 43200
       Policies:
-        - PolicyName: root
+        - PolicyName: DocSplitterPolicy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -52,8 +140,43 @@ Resources:
                   - 'lambda:*'
                   - 'comprehend:*'
                   - 'logs:*'
-                Resource: '*'
+                  - 'iam:PassRole'
+                Resource: '*' # TODO: restring to least priv
+      Tags:
+        - Key: "Project"
+          Value: "document-processing"
+  ComprehendDataAccessRole:
+    Type: 'AWS::IAM::Role'
+    Description: Role for allowing Comprehend access to data
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - comprehend.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      MaxSessionDuration: 43200
+      Policies:
+        - PolicyName: ComprehendDataAccessPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                  - 'iam:GetRole'
+                Resource: '*' # TODO: limit to just split docs pdf
+      Tags: 
+        - Key: "Project"
+          Value: "document-processing"
 Outputs:
-  S3Bucket:
-    Description: Name of the S3Bucket
-    Value: !Ref PDFBucket
+  InputPDFBucket:
+    Description: Upload PDFs to this bucket
+    Value: !Ref InputPDFBucket
+  OutputPDFBucket:
+    Description: Seperated PDFs will be in this bucket
+    Value: !Ref OutputPDFBucket
