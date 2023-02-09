@@ -25,9 +25,16 @@ Resources:
       Tags: 
         - Key: "Project"
           Value: "document-processing"
+  ClassifiedPDFBucket:
+    Type: 'AWS::S3::Bucket'
+    Description: Where PDFs are stored after being classified
+    Properties:
+      Tags: 
+        - Key: "Project"
+          Value: "document-processing"
   OutputPDFBucket:
     Type: 'AWS::S3::Bucket'
-    Description: Where PDFs are stored after being split
+    Description: Where PDFs that are classsified as data are stored after being merged into a single PDF
     Properties:
       Tags: 
         - Key: "Project"
@@ -57,7 +64,7 @@ Resources:
         Project: "document-processing"
     Metadata:
       Dockerfile: Dockerfile
-      DockerContext: functions/0_split_pdf_by_page/
+      DockerContext: functions/0_chunk_pdf/
       DockerTag: v2
   StartComprehendJobFunction:
     Type: 'AWS::Serverless::Function'
@@ -83,17 +90,16 @@ Resources:
           outputBucket: !Ref ComprehendBucket
       Tags: 
         Project: "document-processing"
-  GroupByClassFunction:
+  GroupPageByClassFunction:
     Type: 'AWS::Serverless::Function'
     Properties:
       Description: When new S3 object added to the ComprehendBucket, it moves the page file into the right key
       Role: !GetAtt DocSplitterRole.Arn
       Timeout: 900
       MemorySize: 512
-      PackageType: Zip
-      CodeUri: ./functions/3_group_pages_by_class
-      Runtime: python3.8
-      Handler: index.lambda_handler
+      PackageType: Image
+      ImageConfig:
+        Command: [ "index.lambda_handler" ]
       Events:
           S3Trigger:
             Type: S3
@@ -108,11 +114,46 @@ Resources:
                       Value: .tar.gz
       Environment:
         Variables:
-          comprehendRoleArn: !GetAtt ComprehendDataAccessRole.Arn
           splitBucket: !Sub "docsplitter-splitpdf-bucket-${AWS::AccountId}"
+          outputBucket: !Ref ClassifiedPDFBucket
+      Tags: 
+        Project: "document-processing"
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: functions/2_group_pages_by_class/
+      DockerTag: v2
+  MergePDFFunction:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      Description: When new S3 object is classified, merges the PDF into a single document
+      Role: !GetAtt DocSplitterRole.Arn
+      Timeout: 900
+      MemorySize: 512
+      PackageType: Image
+      ImageConfig:
+        Command: [ "index.lambda_handler" ]
+      Events:
+          S3Trigger:
+            Type: S3
+            Properties:
+              Bucket:
+                Ref: ClassifiedPDFBucket
+              Events: s3:ObjectCreated:*
+              Filter: 
+                S3Key:
+                  Rules:
+                    - Name: suffix
+                      Value: .pdf
+      Environment:
+        Variables:
+          comprehendRoleArn: !GetAtt ComprehendDataAccessRole.Arn
           outputBucket: !Ref OutputPDFBucket
       Tags: 
         Project: "document-processing"
+    Metadata:
+      Dockerfile: Dockerfile
+      DockerContext: functions/3_merge_pages/
+      DockerTag: v2
   DocSplitterRole:
     Type: 'AWS::IAM::Role'
     Description: Role executes Lambda functions
