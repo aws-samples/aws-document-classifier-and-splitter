@@ -14,7 +14,7 @@ pdf2image==1.16.0
 Pillow==9.0.1
 PyPDF2==1.27.5
 python-dateutil==2.8.2
-requests==2.26.0
+requests==2.31.0
 s3transfer==0.5.0
 simplejson==3.17.2
 six==1.16.0
