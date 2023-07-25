@@ -4,7 +4,7 @@ amazon-textract-response-parser==0.1.14
 awslambdaric==2.0.0
 boto3==1.18.11
 botocore==1.21.11
-certifi==2021.5.30
+certifi==2023.7.22
 charset-normalizer==2.0.6
 filetype==1.0.8
 idna==3.2
